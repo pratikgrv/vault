@@ -29,13 +29,22 @@ export default function SignInForm({
 				},
 				{
 					onSuccess: () => {
-						router.push("/dashboard");
+						router.push("/");
 						toast.success("Sign in successful");
 					},
-					onError: (error) => {
-						toast.error(error.error.message || error.error.statusText);
+					onError: (ctx) => {
+						const error = ctx.error as any;
+						if (
+							error.status === 403 ||
+							error.message?.toLowerCase().includes("invalid") ||
+							error.message?.toLowerCase().includes("not found")
+						) {
+							toast.error("No account found, create one");
+						} else {
+							toast.error(error.message || error.statusText);
+						}
 					},
-				},
+				}
 			);
 		},
 		validators: {
@@ -51,8 +60,10 @@ export default function SignInForm({
 	}
 
 	return (
-		<div className="mx-auto w-full mt-10 max-w-md p-6">
-			<h1 className="mb-6 text-center text-3xl font-bold">Welcome Back</h1>
+		<div className="mx-auto mt-10 w-full max-w-md p-6">
+			<h1 className="mb-6 text-center text-3xl font-bold text-gray-900 dark:text-gray-50">
+				Welcome Back
+			</h1>
 
 			<form
 				onSubmit={(e) => {
@@ -125,7 +136,7 @@ export default function SignInForm({
 				<Button
 					variant="link"
 					onClick={onSwitchToSignUp}
-					className="text-indigo-600 hover:text-indigo-800"
+					className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
 				>
 					Need an account? Sign Up
 				</Button>
