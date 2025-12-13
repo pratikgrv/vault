@@ -62,21 +62,49 @@ export const auth = betterAuth({
 					const pendingUsername = ctx?.getCookie("pending_username");
 					const authIntent = ctx?.getCookie("auth_intent");
 
-					if (authIntent === "login" || !pendingUsername) {
-						return false;
+					console.log("Auth Intent:", authIntent);
+					console.log("Pending Username:", pendingUsername);
+
+					// If auth_intent is "login", block account creation (existing user should exist)
+					if (authIntent === "login") {
+						console.log(
+							"Blocking user creation: auth_intent is 'login', user should use existing account"
+						);
+						throw new Error(
+							"ACCOUNT_NOT_FOUND: No account found. Please sign up first."
+						);
 					}
 
-					console.log("pending  username", pendingUsername);
+					// If auth_intent is "signup" and username exists, use it
+					if (authIntent === "signup" && pendingUsername) {
+						console.log("Signup with username from cookie:", pendingUsername);
+						return {
+							data: {
+								...user,
+								username: pendingUsername,
+							},
+						};
+					}
+
+					// Otherwise (no auth_intent or no username), create without username
+					// User will be redirected to onboarding
+					console.log(
+						"Creating user without username - will redirect to onboarding"
+					);
 					return {
 						data: {
 							...user,
-							username: pendingUsername,
+							username: null, // No username yet - needs onboarding
 						},
 					};
 				},
 				after: async (user, ctx) => {
-					console.log({ user });
+					console.log("User created successfully:", { user });
 					console.log("Path", ctx?.path);
+
+					// Clean up cookies after successful user creation
+					ctx?.setCookie("pending_username", "", { maxAge: 0 });
+					ctx?.setCookie("auth_intent", "", { maxAge: 0 });
 				},
 			},
 		},

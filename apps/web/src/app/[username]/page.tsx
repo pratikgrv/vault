@@ -28,15 +28,15 @@ export default async function Page({
 		headers: await headers(),
 	});
 
-	const isOwner = session?.user?.id === user.id;
+	const isOwner = session?.user?.id === user?.id;
 
 	// Transform DB data to ProfileData
 	const profileData: any = {
-		name: user.name,
-		username: user.username || "",
-		bio: user.profile?.bio || DEMO_PROFILE.bio,
-		theme: (user.profile?.theme as any) || DEMO_PROFILE.theme,
-		links: (user.profile?.links as any) || DEMO_PROFILE.links,
+		name: user?.name,
+		username: user?.username || "",
+		bio: user?.profile?.bio || DEMO_PROFILE.bio,
+		theme: (user?.profile?.theme as any) || DEMO_PROFILE.theme,
+		links: (user?.profile?.links as any) || DEMO_PROFILE.links,
 	};
 
 	if (isOwner) {

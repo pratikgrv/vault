@@ -16,7 +16,16 @@ export default async function Home() {
 		session?.user?.username
 	);
 
+	// If user is logged in
 	if (session) {
+		// Check if user has a username
+		if (!session.user.username) {
+			// New user from social login without username - redirect to onboarding
+			console.log("User needs onboarding - no username set");
+			redirect("/onboarding");
+		}
+
+		// User has username - redirect to their profile
 		redirect(`/${session.user.username}`);
 	}
 
