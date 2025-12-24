@@ -1,13 +1,16 @@
+// ============================================
+// PROFILE - Core user profile info
+// ============================================
 model Profile {
   id     String @id @default(cuid())
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Profile Data
-  bio     String?
-  theme   Json?   @default("{}") // Stores { backgroundColor, primaryColor, etc. }
-  links   Json?   @default("[]") // Stores array of { id, title, url }
-  socials Json?   @default("{}") // Stores { twitter, github, etc. }
+  bio String?
+
+  // Relations
+  links     Link[]
+  interests Interest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -15,3 +18,4 @@ model Profile {
   @@index([userId])
   @@map("profile")
 }
+

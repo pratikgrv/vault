@@ -1,42 +1,81 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import {
 	type ProfileData,
 	DEMO_PROFILE,
 	ProfileDisplay,
 } from "./profile-display";
+import { SocialAddModal } from "./social-add-modal";
+import { motion, AnimatePresence } from "motion/react";
+import {
+	ChartNoAxesColumn,
+	User,
+	Settings2,
+	Globe,
+	Compass,
+	MessageCircle,
+	Link as LinkIcon,
+	Quote,
+	Calculator,
+	Monitor,
+	Smartphone,
+	Trash2,
+	Plus,
+	Save,
+} from "lucide-react";
+import { updateProfile } from "@/actions/profile";
+import { toast } from "sonner";
+import ToolbarExpandable, { type ToolbarItem } from "../dynamic-toolbar";
+import UserRankingEdit from "../user-section/user-ranking-edit";
+import UserSettings from "../user-section/user-settings";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
-import { Plus, Trash2, Smartphone, Monitor, Loader2, Save } from "lucide-react";
-import { updateProfile } from "@/actions/profile";
-import { toast } from "sonner";
 
 interface ProfileEditorProps {
 	initialData?: ProfileData;
 }
 
 export function ProfileEditor({ initialData }: ProfileEditorProps) {
-	const [profile, setProfile] = useState<ProfileData>(
-		initialData || DEMO_PROFILE
+	const defaultProfile = useMemo(
+		() => initialData || DEMO_PROFILE,
+		[initialData]
 	);
-	const [viewMode, setViewMode] = useState<"mobile" | "desktop">("mobile");
+
+	// Initialize active categories based on existing interests
+	const initialCategories = () => {
+		console.log(defaultProfile, "defaultProfile");
+		const categories = new Set(
+			defaultProfile.interests?.map((i) => i.category) || []
+		);
+		if (categories.size === 0) categories.add("anime"); // Default category
+		return Array.from(categories);
+	};
+
+	const [profile, setProfile] = useState<ProfileData>({
+		...defaultProfile,
+		activeCategories: initialCategories(),
+	});
+
+	const [viewMode, setViewMode] = useState<"mobile" | "desktop">("desktop");
+	const [isSocialModalOpen, setIsSocialModalOpen] = useState(false);
 	const [isPending, startTransition] = useTransition();
+
+	const isDirty = useMemo(() => {
+		// Simple dirty check - can be improved
+		return (
+			JSON.stringify(profile) !==
+			JSON.stringify({
+				...defaultProfile,
+				activeCategories: initialCategories,
+			})
+		);
+	}, [profile, defaultProfile, initialCategories]);
 
 	const handleBasicChange = (field: keyof ProfileData, value: string) => {
 		setProfile((prev) => ({ ...prev, [field]: value }));
-	};
-
-	const handleThemeChange = (
-		field: keyof NonNullable<ProfileData["theme"]>,
-		value: string
-	) => {
-		setProfile((prev) => ({
-			...prev,
-			theme: { ...prev.theme!, [field]: value },
-		}));
 	};
 
 	const updateLink = (id: string, field: "title" | "url", value: string) => {
@@ -57,6 +96,71 @@ export function ProfileEditor({ initialData }: ProfileEditorProps) {
 		setProfile((prev) => ({ ...prev, links: [...prev.links, newLink] }));
 	};
 
+	const handleSocialAdd = (social: {
+		platform: string;
+		username: string;
+		url: string;
+	}) => {
+		const newSocial = {
+			...social,
+			id: Math.random().toString(36).substr(2, 9),
+		};
+		setProfile((prev) => ({
+			...prev,
+			socials: [...(prev.socials || []), newSocial],
+		}));
+	};
+
+	const handleSocialDelete = (id: string) => {
+		setProfile((prev) => ({
+			...prev,
+			socials: prev.socials?.filter((s) => s.id !== id) || [],
+		}));
+	};
+
+	const handleRankingChange = (category: string, newInterests: any[]) => {
+		setProfile((prev) => {
+			// Remove all interests of this category
+			const otherInterests = (prev.interests || []).filter(
+				(i) => i.category !== category
+			);
+
+			// Map new interests to schema format
+			const mappedNewInterests = newInterests.map((i) => ({
+				id: i.id || Math.random().toString(36).substr(2, 9),
+				title: i.title,
+				imageUrl:
+					i.imageUrl ||
+					i.images?.webp?.large_image_url ||
+					i.images?.jpg?.large_image_url,
+				category: category,
+				content: i.content || {
+					score: i.score,
+					type: i.type,
+				},
+			}));
+
+			return {
+				...prev,
+				interests: [...otherInterests, ...mappedNewInterests],
+			};
+		});
+	};
+
+	const onCategoryToggle = (category: string) => {
+		setProfile((prev) => {
+			const current = prev.activeCategories || [];
+			if (current.includes(category)) {
+				return {
+					...prev,
+					activeCategories: current.filter((c) => c !== category),
+				};
+			} else {
+				return { ...prev, activeCategories: [...current, category] };
+			}
+		});
+	};
+
 	const removeLink = (id: string) => {
 		setProfile((prev) => ({
 			...prev,
@@ -64,17 +168,74 @@ export function ProfileEditor({ initialData }: ProfileEditorProps) {
 		}));
 	};
 
+	// const updateLink = (id: string, field: "title" | "url", value: string) => {
+	// 	setProfile((prev) => ({
+	// 		...prev,
+	// 		links: prev.links.map((link) =>
+	// 			link.id === id ? { ...link, [field]: value } : link
+	// 		),
+	// 	}));
+	// };
+	console.log(initialCategories(), "active category");
 	const handleSave = () => {
 		startTransition(async () => {
-			const result = await updateProfile({
-				name: profile.name,
-				bio: profile.bio,
-				theme: {
-					backgroundColor: profile.theme?.backgroundColor || "#f9fafb",
-					primaryColor: profile.theme?.primaryColor || "#000000",
-				},
-				links: profile.links,
-			});
+			const payload: any = {};
+			let hasChanges = false;
+
+			// Check Name/Bio changes
+			if (
+				profile.name !== defaultProfile.name ||
+				profile.bio !== defaultProfile.bio
+			) {
+				payload.name = profile.name;
+				payload.bio = profile.bio;
+				hasChanges = true;
+			}
+
+			// Check Links changes
+			if (
+				JSON.stringify(profile.links) !== JSON.stringify(defaultProfile.links)
+			) {
+				payload.links = profile.links.map((link, index) => ({
+					...link,
+					type: "link" as const,
+					order: index,
+				}));
+				hasChanges = true;
+			}
+
+			// Check Socials changes
+			if (
+				JSON.stringify(profile.socials) !==
+				JSON.stringify(defaultProfile.socials)
+			) {
+				payload.socials = (profile.socials || []).map((social, index) => ({
+					...social,
+					order: index,
+				}));
+				hasChanges = true;
+			}
+
+			// Check Interests changes
+			if (
+				JSON.stringify(profile.interests) !==
+				JSON.stringify(defaultProfile.interests)
+			) {
+				payload.interests = (profile.interests || []).map(
+					(interest, index) => ({
+						...interest,
+						order: index,
+					})
+				);
+				hasChanges = true;
+			}
+
+			if (!hasChanges) {
+				toast.info("No changes to save");
+				return;
+			}
+
+			const result = await updateProfile(payload);
 
 			if (result.success) {
 				toast.success("Profile updated successfully");
@@ -84,213 +245,226 @@ export function ProfileEditor({ initialData }: ProfileEditorProps) {
 		});
 	};
 
-	return (
-		<div className="flex flex-col lg:flex-row h-screen bg-gray-100 dark:bg-gray-900 overflow-hidden font-sans">
-			{/* Editor Panel */}
-			<div className="w-full lg:w-1/3 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full z-10 shadow-lg">
-				<div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800">
-					<div>
-						<h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Edit Profile</h2>
-						<p className="text-sm text-gray-500 dark:text-gray-400">Customize your public page</p>
+	const handleShare = () => {
+		navigator.clipboard.writeText(window.location.href.replace("/edit", ""));
+		toast.success("Link copied to clipboard!");
+	};
+
+	const ITEMS: ToolbarItem[] = [
+		{
+			id: "settings",
+			type: "panel",
+			label: "Settings",
+			title: <Settings2 className="h-5 w-5" />,
+			content: <UserSettings user={profile} />,
+		},
+		{
+			id: "separator-1",
+			type: "separator",
+		},
+		{
+			id: "save",
+			type: "custom",
+			content: isDirty ? (
+				<button
+					onClick={handleSave}
+					disabled={isPending}
+					className="bg-green-400 shrink-0 text-nowrap dark:bg-green-400/80 hover:bg-green-400/90 text-white px-6 py-1.5 rounded-full text-sm font-bold transition-colors disabled:opacity-50 shadow-lg shadow-primary/20"
+				>
+					{isPending ? "Saving..." : "Save Now"}
+				</button>
+			) : (
+				<button
+					onClick={handleShare}
+					className="bg-green-500 hover:bg-green-600 text-white px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
+				>
+					Share my Vault
+				</button>
+			),
+		},
+		{
+			id: "separator-2",
+			type: "separator",
+		},
+		// {
+		// 	id: "links",
+		// 	type: "panel",
+		// 	label: "Links",
+		// 	title: <LinkIcon className="h-5 w-5" />,
+		// 	content: (
+		// 		<div className="p-4 w-80 space-y-4">
+		// 			<div className="flex items-center justify-between">
+		// 				<h3 className="font-medium text-sm">Links</h3>
+		// 				<Button
+		// 					size="sm"
+		// 					variant="outline"
+		// 					onClick={addLink}
+		// 					className="h-7 text-xs"
+		// 				>
+		// 					<Plus className="w-3 h-3 mr-1" /> Add
+		// 				</Button>
+		// 			</div>
+		// 			<div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+		// 				{profile.links.map((link) => (
+		// 					<div
+		// 						key={link.id}
+		// 						className="p-3 border rounded-lg space-y-2 bg-muted/50"
+		// 					>
+		// 						<div className="flex items-start gap-2">
+		// 							<div className="space-y-2 flex-1">
+		// 								<Input
+		// 									placeholder="Title"
+		// 									value={link.title}
+		// 									onChange={(e) =>
+		// 										updateLink(link.id, "title", e.target.value)
+		// 									}
+		// 									className="h-7 text-xs"
+		// 								/>
+		// 								<Input
+		// 									placeholder="URL"
+		// 									value={link.url}
+		// 									onChange={(e) =>
+		// 										updateLink(link.id, "url", e.target.value)
+		// 									}
+		// 									className="h-7 text-xs font-mono"
+		// 								/>
+		// 							</div>
+		// 							<Button
+		// 								variant="ghost"
+		// 								size="icon"
+		// 								className="h-6 w-6 text-muted-foreground hover:text-destructive"
+		// 								onClick={() => removeLink(link.id)}
+		// 							>
+		// 								<Trash2 className="w-3 h-3" />
+		// 							</Button>
+		// 						</div>
+		// 					</div>
+		// 				))}
+		// 				{profile.links.length === 0 && (
+		// 					<div className="text-center p-4 border border-dashed rounded text-xs text-muted-foreground">
+		// 						No links yet
+		// 					</div>
+		// 				)}
+		// 			</div>
+		// 			<Button
+		// 				size="sm"
+		// 				className="w-full"
+		// 				onClick={handleSave}
+		// 				disabled={isPending}
+		// 			>
+		// 				{isPending ? "Saving..." : "Save Changes"}
+		// 			</Button>
+		// 		</div>
+		// 	),
+		// },
+		{
+			id: "bio",
+			type: "panel",
+			label: "Bio",
+			title: <Quote className="h-5 w-5" />,
+			content: (
+				<div className="p-4 w-content space-y-3">
+					<h3 className="font-medium text-sm">Edit Bio</h3>
+					<Textarea
+						placeholder="Tell your story..."
+						value={profile.bio || ""}
+						onChange={(e) => handleBasicChange("bio", e.target.value)}
+						className="h-24 resize-none text-sm"
+					/>
+					<div className="space-y-2">
+						<Label className="text-xs">Display Name</Label>
+						<Input
+							value={profile.name}
+							onChange={(e) => handleBasicChange("name", e.target.value)}
+							className="h-8 text-sm"
+						/>
 					</div>
-					<div className="flex gap-2">
-						<Button
-							variant="outline"
-							size="icon"
-							onClick={() => setViewMode("mobile")}
-							className={viewMode === "mobile" ? "bg-gray-100 dark:bg-gray-700" : "dark:text-gray-400 dark:border-gray-600 dark:hover:bg-gray-700"}
-							title="Mobile View"
-						>
-							<Smartphone className="w-4 h-4" />
-						</Button>
-						<Button
-							variant="outline"
-							size="icon"
-							onClick={() => setViewMode("desktop")}
-							className={viewMode === "desktop" ? "bg-gray-100 dark:bg-gray-700" : "dark:text-gray-400 dark:border-gray-600 dark:hover:bg-gray-700"}
-							title="Desktop View"
-						>
-							<Monitor className="w-4 h-4" />
-						</Button>
-					</div>
-				</div>
-
-				<div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent">
-					{/* Profile Info */}
-					<section className="space-y-4">
-						<h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-							Profile Information
-						</h3>
-						<div className="space-y-2">
-							<Label className="dark:text-gray-300">Display Name</Label>
-							<Input
-								value={profile.name}
-								onChange={(e) => handleBasicChange("name", e.target.value)}
-								placeholder="What should we call you?"
-								className="dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 dark:placeholder-gray-400"
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label className="dark:text-gray-300">Bio</Label>
-							<Textarea
-								value={profile.bio}
-								onChange={(e) => handleBasicChange("bio", e.target.value)}
-								className="h-24 resize-none dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 dark:placeholder-gray-400"
-								placeholder="Tell the world about yourself..."
-							/>
-						</div>
-					</section>
-
-					<hr className="border-gray-100 dark:border-gray-700" />
-
-					{/* Theme */}
-					<section className="space-y-4">
-						<h3 className="font-semibold text-gray-900 dark:text-gray-100">Theme</h3>
-						<div className="grid grid-cols-2 gap-4">
-							<div className="space-y-2">
-								<Label className="dark:text-gray-300">Background</Label>
-								<div className="flex items-center gap-2 p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
-									<input
-										type="color"
-										value={profile.theme?.backgroundColor}
-										onChange={(e) =>
-											handleThemeChange("backgroundColor", e.target.value)
-										}
-										className="h-8 w-8 rounded overflow-hidden cursor-pointer border-none bg-transparent"
-									/>
-									<span className="text-xs font-mono text-gray-500 dark:text-gray-300 uppercase">
-										{profile.theme?.backgroundColor}
-									</span>
-								</div>
-							</div>
-							<div className="space-y-2">
-								<Label className="dark:text-gray-300">Buttons & Accents</Label>
-								<div className="flex items-center gap-2 p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
-									<input
-										type="color"
-										value={profile.theme?.primaryColor}
-										onChange={(e) =>
-											handleThemeChange("primaryColor", e.target.value)
-										}
-										className="h-8 w-8 rounded overflow-hidden cursor-pointer border-none bg-transparent"
-									/>
-									<span className="text-xs font-mono text-gray-500 dark:text-gray-300 uppercase">
-										{profile.theme?.primaryColor}
-									</span>
-								</div>
-							</div>
-						</div>
-					</section>
-
-					<hr className="border-gray-100 dark:border-gray-700" />
-
-					{/* Links */}
-					<section className="space-y-4">
-						<div className="flex items-center justify-between">
-							<h3 className="font-semibold text-gray-900 dark:text-gray-100">Links</h3>
-							<Button size="sm" variant="outline" onClick={addLink} className="dark:text-gray-400 dark:border-gray-600 dark:hover:bg-gray-700">
-								<Plus className="w-4 h-4 mr-1" /> Add
-							</Button>
-						</div>
-
-						<div className="space-y-4">
-							{profile.links.map((link) => (
-								<div
-									key={link.id}
-									className="p-4 border rounded-lg space-y-3 bg-gray-50 dark:bg-gray-700 dark:border-gray-600 group hover:border-gray-300 dark:hover:border-gray-500 transition-colors"
-								>
-									<div className="flex items-start justify-between gap-3">
-										<div className="space-y-3 flex-1">
-											<Input
-												placeholder="Link Title (e.g., Portfolio)"
-												value={link.title}
-												onChange={(e) =>
-													updateLink(link.id, "title", e.target.value)
-												}
-												className="bg-white dark:bg-gray-600 dark:text-gray-100 dark:border-gray-500 dark:placeholder-gray-300"
-											/>
-											<Input
-												placeholder="URL (https://...)"
-												value={link.url}
-												onChange={(e) =>
-													updateLink(link.id, "url", e.target.value)
-												}
-												className="bg-white text-sm font-mono text-gray-600 dark:bg-gray-600 dark:text-gray-100 dark:border-gray-500 dark:placeholder-gray-300"
-											/>
-										</div>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="text-gray-400 hover:text-red-500 hover:bg-red-50 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-red-900 -mt-1 -mr-1"
-											onClick={() => removeLink(link.id)}
-										>
-											<Trash2 className="w-4 h-4" />
-										</Button>
-									</div>
-								</div>
-							))}
-							{profile.links.length === 0 && (
-								<div className="text-center p-8 border-2 border-dashed rounded-lg text-gray-400 dark:text-gray-500 dark:border-gray-600">
-									<p>No links added yet.</p>
-									<Button variant="link" onClick={addLink} className="dark:text-blue-400 dark:hover:text-blue-300">
-										Add your first link
-									</Button>
-								</div>
-							)}
-						</div>
-					</section>
-				</div>
-
-				<div className="p-6 border-t border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
 					<Button
+						size="sm"
 						className="w-full"
-						size="lg"
 						onClick={handleSave}
 						disabled={isPending}
 					>
-						{isPending ? (
-							<>
-								<Loader2 className="w-4 h-4 mr-2 animate-spin" />
-								Saving...
-							</>
-						) : (
-							<>
-								<Save className="w-4 h-4 mr-2" />
-								Save Changes
-							</>
-						)}
+						{isPending ? "Saving..." : "Save Changes"}
 					</Button>
 				</div>
-			</div>
+			),
+		},
+		{
+			id: "interests",
+			type: "panel",
+			label: "Interests",
+			title: <Globe className="h-5 w-5" />,
+			content: (
+				<UserRankingEdit
+					activeCategories={profile.activeCategories || []}
+					onToggleCategory={onCategoryToggle}
+				/>
+			),
+		},
+		{
+			id: "separator-3",
+			type: "separator",
+		},
+		{
+			id: "view-mode",
+			type: "action",
+			label: "Toggle View",
+			title:
+				viewMode === "desktop" ? (
+					<Smartphone className="h-5 w-5" />
+				) : (
+					<Monitor className="h-5 w-5" />
+				),
+			onClick: () =>
+				setViewMode((prev) => (prev === "desktop" ? "mobile" : "desktop")),
+		},
+		{
+			id: "delete",
+			type: "action",
+			label: "Delete",
+			title: <Trash2 className="h-5 w-5" />,
+			onClick: () => toast.error("Delete functionality not implemented"),
+		},
+	];
 
-			{/* Preview Panel */}
-			<div className="hidden lg:flex flex-1 bg-gray-100 dark:bg-gray-900 items-center justify-center p-8 relative overflow-hidden">
-				<div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#374151_1px,transparent_1px)] bg-size-[16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]"></div>
-
-				<div className="absolute top-4 right-4 z-20 flex flex-col gap-2 items-end">
-					<div className="bg-white dark:bg-gray-800 px-3 py-1 rounded-full shadow-sm text-sm font-medium text-gray-500 dark:text-gray-300 flex items-center gap-2">
-						<div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-						Live Preview
-					</div>
-				</div>
+	return (
+		<div className="flex flex-col  ">
+			{/* Preview Area (Full Screen) */}
+			<div className="flex-1 flex items-center justify-center  relative overflow-hidden bg-muted/30">
+				{/* <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#374151_1px,transparent_1px)] bg-size-[16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]"></div>
+				 */}
 
 				<div
-					className={`transition-all duration-500 ease-in-out relative bg-white dark:bg-gray-800 shadow-2xl overflow-hidden ${
+					className={`transition-all duration-500 ease-in-out relative shadow-2xl overflow-hidden ${
 						viewMode === "mobile"
-							? "w-[375px] h-[812px] rounded-[3rem] border-8 border-gray-900 dark:border-gray-700"
-							: "w-full max-w-4xl h-[90%] rounded-xl border border-gray-200 dark:border-gray-700"
+							? "w-full h-full md:w-[375px] md:h-[812px] md:rounded-[3rem] md:border-8 border-gray-900 dark:border-gray-700"
+							: "w-full h-full rounded-none border-0"
 					}`}
 				>
-					{/* Notch (Mobile only) */}
 					{viewMode === "mobile" && (
-						<div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-7 bg-gray-900 dark:bg-gray-700 rounded-b-2xl z-20 pointer-events-none"></div>
+						<div className="hidden md:block absolute top-0 left-1/2 -translate-x-1/2 w-40 h-7 bg-gray-900 dark:bg-gray-700 rounded-b-2xl z-20 pointer-events-none"></div>
 					)}
 
-					<div className="h-full w-full overflow-y-auto no-scrollbar">
-						<ProfileDisplay data={profile} preview={true} />
+					<div className="">
+						<ProfileDisplay
+							data={profile}
+							preview={true}
+							onRankingChange={handleRankingChange}
+							onSocialAdd={() => setIsSocialModalOpen(true)}
+							onSocialDelete={handleSocialDelete}
+						/>
 					</div>
 				</div>
 			</div>
+
+			<SocialAddModal
+				isOpen={isSocialModalOpen}
+				onClose={() => setIsSocialModalOpen(false)}
+				onSave={handleSocialAdd}
+			/>
+
+			<ToolbarExpandable items={ITEMS} />
 		</div>
 	);
 }

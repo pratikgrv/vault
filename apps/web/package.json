@@ -8,34 +8,38 @@
 		"start": "next start"
 	},
 	"dependencies": {
-		"radix-ui": "^1.4.2",
+		"@prisma/client": "catalog:",
+		"@radix-ui/react-dialog": "^1.1.15",
 		"@tanstack/react-form": "^1.12.3",
+		"@tanstack/react-query": "^5.85.5",
+		"@vault/auth": "workspace:*",
+		"@vault/db": "workspace:*",
+		"babel-plugin-react-compiler": "^1.0.0",
+		"better-auth": "catalog:",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
+		"cmdk": "^1.1.1",
 		"lucide-react": "^0.546.0",
+		"motion": "^12.23.26",
 		"next": "^16.0.7",
 		"next-themes": "^0.4.6",
+		"radix-ui": "^1.4.2",
 		"react": "19.1.2",
 		"react-dom": "19.1.2",
+		"react-use-measure": "^2.1.7",
 		"sonner": "^2.0.5",
 		"tailwind-merge": "^3.3.1",
 		"tw-animate-css": "^1.3.4",
-		"zod": "^4.1.12",
-		"babel-plugin-react-compiler": "^1.0.0",
-		"@tanstack/react-query": "^5.85.5",
-		"@prisma/client": "catalog:",
-		"better-auth": "catalog:",
-		"@vault/auth": "workspace:*",
-		"@vault/db": "workspace:*"
+		"zod": "^4.1.12"
 	},
 	"devDependencies": {
 		"@tailwindcss/postcss": "^4.1.10",
+		"@tanstack/react-query-devtools": "^5.85.5",
 		"@types/node": "^20",
 		"@types/react": "19.2.2",
 		"@types/react-dom": "19.2.2",
+		"@vault/config": "workspace:*",
 		"tailwindcss": "^4.1.10",
-		"typescript": "^5",
-		"@tanstack/react-query-devtools": "^5.85.5",
-		"@vault/config": "workspace:*"
+		"typescript": "^5"
 	}
 }

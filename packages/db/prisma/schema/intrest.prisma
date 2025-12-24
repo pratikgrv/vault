@@ -1,0 +1,20 @@
+// ============================================
+// INTEREST - Flexible for anime, movies, games, etc.
+// ============================================
+model Interest {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  title    String
+  imageUrl String
+  category String
+  content  Json?  @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([category])
+  @@map("interest")
+}
